@@ -5,14 +5,13 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEditor.VersionControl;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Framework
 {
-    public class LDebug:Singleton<LDebug>
+    public class LDebug : Singleton<LDebug>
     {
-        private string template = "<color={0}>{1}</color>";
-        private string tempWithObj = "<color={0}>{1}</color>, obj: {2}";
-        private Dictionary<EDebugGrade, Action<string, object>> _debugDic = new Dictionary<EDebugGrade, Action<string, object>>(5);
+        private Dictionary<EDebugGrade, Action<object, Object>> _debugDic = new Dictionary<EDebugGrade, Action<object, Object>>(5);
 
         public LDebug()
         {
@@ -46,12 +45,27 @@ namespace Framework
         }
 
         /// <summary>
-        /// 对外唯一暴露的接口，一定要传入日志的等级类型
+        /// 对外暴露的接口，格式化打印日志
         /// </summary>
-        /// <param name="debugGrade"></param>
+        /// <param name="debugGrade">日志等级</param>
+        /// <param name="msg">例："a is {0}, b is {1}"</param>
+        /// <param name="obj">可变参数，根据format的格式传入匹配的参数，例：a, b</param>
+        public void PrintLogFormat(string format, params object[] args)
+        {
+            if (mDebugState == EDebugState.CLOSE)
+            {
+                return;
+            }
+            Debug.LogFormat(format, args);
+        }
+
+        /// <summary>
+        /// 对外暴露的接口
+        /// </summary>
         /// <param name="msg"></param>
-        /// <param name="obj"></param>
-        public void PrintLog(EDebugGrade debugGrade, string msg, object obj)
+        /// <param name="debugGrade">不传，默认是DEBUG等级</param>
+        /// <param name="context">用于的对象</param>
+        public void PrintLog(EDebugGrade debugGrade, object msg,  Object context = null)
         {
             if (mDebugState == EDebugState.CLOSE)
             {
@@ -60,26 +74,39 @@ namespace Framework
             mDebugGrade = debugGrade;
             if (_debugDic.Keys.Contains(mDebugGrade))
             {
-                _debugDic[mDebugGrade](msg, obj);
+                _debugDic[mDebugGrade](msg, context);
             }
         }
 
         /// <summary>
-        /// 重载PrintLog，只需要传入两个参数即可
+        /// 重载PrintLog，只打印字符串，可以指定字符串的颜色
         /// </summary>
-        /// <param name="debugGrade"></param>
         /// <param name="msg"></param>
-        public void PrintLog(EDebugGrade debugGrade, string msg)
+        /// <param name="color"></param>
+        public void PrintLog(string msg, string color)
         {
             if (mDebugState == EDebugState.CLOSE)
             {
                 return;
             }
-            mDebugGrade = debugGrade;
-            if (_debugDic.Keys.Contains(mDebugGrade))
+            if (string.IsNullOrEmpty(color))
             {
-                _debugDic[mDebugGrade](msg, null);
+                color = "yellow";
             }
+            Debug.Log(FmtColor(color, msg));
+        }
+
+        /// <summary>
+        /// 重载PrintLog，只打印字符串
+        /// </summary>
+        /// <param name="msg"></param>
+        public void PrintLog(string msg)
+        {
+            if (mDebugState == EDebugState.CLOSE)
+            {
+                return;
+            }
+            DebugNormal(msg);
         }
 
         /// <summary>
@@ -87,16 +114,9 @@ namespace Framework
         /// </summary>
         /// <param name="msg"></param>
         /// <param name="obj"></param>
-        private void DebugTrace(string msg, object obj)
+        private void DebugTrace(object message, Object context = null)
         {
-            if (obj == null)
-            {
-                Debug.LogFormat(template, "#63B8FF", msg);
-            }
-            else
-            {
-                Debug.LogFormat(tempWithObj, "#63B8FF", msg, obj);
-            } 
+            Debug.Log(FmtColor("#63B8FF", message), context);
         }
 
         /// <summary>
@@ -104,16 +124,9 @@ namespace Framework
         /// </summary>
         /// <param name="msg"></param>
         /// <param name="obj"></param>
-        private void DebugNormal(string msg, object obj)
+        private void DebugNormal(object message, Object context = null)
         {
-            if (obj == null)
-            {
-                Debug.Log(msg);
-            }
-            else
-            {
-                Debug.Log("msg: " + msg + " obj:" + obj.ToString());
-            }
+            Debug.Log(message, context);
         }
 
         /// <summary>
@@ -121,16 +134,9 @@ namespace Framework
         /// </summary>
         /// <param name="msg"></param>
         /// <param name="obj"></param>
-        private void DebugInfo(string msg, object obj)
+        private void DebugInfo(object message, Object context = null)
         {
-            if (obj == null)
-            {
-                Debug.LogFormat(template, "#FFF68F", msg);
-            }
-            else
-            {
-                Debug.LogFormat(tempWithObj, "#FFF68F", msg, obj);
-            }
+            Debug.Log(FmtColor("#FFF68F", message), context);
         }
 
         /// <summary>
@@ -138,16 +144,9 @@ namespace Framework
         /// </summary>
         /// <param name="msg"></param>
         /// <param name="obj"></param>
-        private void DebugWarn(string msg, object obj)
+        private void DebugWarn(object message, Object context = null)
         {
-            if (obj == null)
-            {
-                Debug.LogWarning(msg);
-            }
-            else
-            {
-                Debug.LogWarning("msg: " + msg + " obj:" + obj.ToString());
-            }
+            Debug.LogWarning(message, context);
         }
 
         /// <summary>
@@ -155,16 +154,118 @@ namespace Framework
         /// </summary>
         /// <param name="msg">字符信息</param>
         /// <param name="obj">object类型</param>
-        private void DebugError(string msg, object obj)
+        private void DebugError(object message, Object context = null)
         {
-            if (obj == null)
+            Debug.LogError(message, context);
+        }
+
+        /// <summary>
+        /// 格式化颜色日志
+        /// </summary>
+        /// <param name="color"></param>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        private object FmtColor(string color, object obj)
+        {
+            if (obj is string)
             {
-                Debug.LogError(msg);
+#if !UNITY_EDITOR
+                return obj;
+#else
+                return FmtColor(color, (string)obj);
+#endif
             }
             else
             {
-                Debug.LogError("msg: " + msg + " obj:" + obj.ToString());
+#if !UNITY_EDITOR
+                return obj  
+#else
+                return string.Format("<color={0}>{1}</color>", color, obj);
+#endif
             }
         }
+
+        private object FmtColor(string color, string msg)
+        {
+#if !UNITY_EDITOR
+            return msg;
+#else
+            int p = msg.IndexOf('\n');
+            if (p >= 0)
+            {
+                // 可以同时显示两行
+                p = msg.IndexOf('\n', p + 1);
+            }
+            if (p < 0 || p > msg.Length - 1)
+            {
+                return string.Format("<color={0}>{1}</color>", color, msg);
+            }
+            if (p > 2 && msg[p - 1] == '\r') p--;
+            return string.Format("<color={0}>{1}</color>{2}", color, msg.Substring(0, p), msg.Substring(p));
+#endif
+        }
+
+        #region 解决日志双击溯源问题
+#if UNITY_EDITOR
+        [UnityEditor.Callbacks.OnOpenAsset(0)]
+        static bool OnOpenAsset(int instanceID, int line)
+        {
+            string stackTrace = GetLogStackTrace();
+            if (!string.IsNullOrEmpty(stackTrace) && stackTrace.Contains("LDebug:Log"))
+            {
+                // 使用正则表达式匹配at的哪个脚本的哪一行
+                var matches = System.Text.RegularExpressions.Regex.Match(stackTrace, @"\(at (.+)\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                string pathLine = "";
+                while(matches.Success)
+                {
+                    pathLine = matches.Groups[1].Value;
+                    if (!pathLine.Contains("LDebug.cs"))
+                    {
+                        int splitIndex = pathLine.LastIndexOf(":");
+                        // 脚本路径
+                        string path = pathLine.Substring(0, splitIndex);
+                        // 行号(第几行)
+                        line = Convert.ToInt32(pathLine.Substring(splitIndex + 1));
+                        string fullPath = Application.dataPath.Substring(0, Application.dataPath.LastIndexOf("Assets"));
+                        fullPath = fullPath + path;
+                        // 跳转到目标代码的特定行
+                        UnityEditorInternal.InternalEditorUtility.OpenFileAtLineExternal(fullPath.Replace('/', '\\'), line);
+                        break;
+                    }
+                    matches = matches.NextMatch();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取当前日志窗口选中的日志的堆栈信息
+        /// </summary>
+        /// <returns></returns>
+        private static string GetLogStackTrace()
+        {
+            // 通过反射获取ConsoleWindow类
+            var ConsoleWindowType = typeof(UnityEditor.EditorWindow).Assembly.GetType("UnityEditor.ConsoleWindow");
+            // 获取窗口实例
+            var fieldInfo = ConsoleWindowType.GetField("ms_ConsoleWindow",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var consoleInstance = fieldInfo.GetValue(null);
+            if (consoleInstance != null)
+            {
+                object objFocusedWindow = UnityEditor.EditorWindow.focusedWindow as object;
+                if (objFocusedWindow == consoleInstance)
+                {
+                    // 获取m_ActiveText成员
+                    fieldInfo = ConsoleWindowType.GetField("m_ActiveText", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                    // 获取m_ActiveText的值
+                    string activeText = fieldInfo.GetValue(consoleInstance).ToString();
+                    return activeText;
+                }
+            }
+            return null;
+        }
+#endif
+#endregion 解决日志双击溯源问题
     }
 }
