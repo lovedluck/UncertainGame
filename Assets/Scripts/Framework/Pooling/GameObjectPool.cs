@@ -7,36 +7,16 @@ using UnityEngine;
 
 namespace Framework.Pooling
 {
-    public class GameObjectPool : ObjectPool<GameObject>, IDisposable
+    public class GameObjectPool : ObjectPool
     {
-        public void Dispose()
-        {
-            
-        }
+        // 需要缓存的对象
+        private float m_LiftTime;
 
-        public override GameObject Get()
+        public GameObjectPool(string poolName, Transform transform, float lifetime)
         {
-            throw new NotImplementedException();
-        }
-
-        public override void Init()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void Put(GameObject obj)
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override GameObject Create()
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override void Destroy()
-        {
-            throw new NotImplementedException();
+            PoolName = poolName;
+            m_Parent = transform;
+            m_LiftTime = lifetime;
         }
     }
 }
